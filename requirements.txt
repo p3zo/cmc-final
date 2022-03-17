@@ -1,0 +1,7 @@
+torch==1.9.0
+torchvision==0.10.0
+torchaudio==0.9.0
+
+pytorch-fast-transformers==0.4.0
+
+miditoolkit==0.1.15

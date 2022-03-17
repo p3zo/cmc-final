@@ -1,0 +1,9 @@
+.DS_Store
+__pycache__
+
+data/
+notes/
+output/
+
+pretrained_transformer
+co-representation
