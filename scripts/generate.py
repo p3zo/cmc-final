@@ -1,38 +1,31 @@
-import argparse
+"""Adapted from https://github.com/annahung31/EMOPIA/blob/main/workspace/transformer/generate.ipynb"""
+
+import os
 import pickle
 
 import torch
-
-from emopia_transformer.model import TransformerModel, network_paras
+from emopia_transformer.model import TransformerModel
 from emopia_transformer.utils import write_midi
 
 PRETRAINED_MODEL_PATH = "emopia_transformer/pretrained_transformer/loss_25_params.pt"
 DICTIONARY_PATH = "emopia_transformer/co-representation/dictionary.pkl"
 
+try:
+    THIS_DIR = os.path.dirname(os.path.realpath(__file__))
+except:
+    THIS_DIR = os.getcwd()
+
+OUTPUT_DIR = os.path.join(THIS_DIR, "../output")
+EMOPIA_OUTPUT_DIR = os.path.join(OUTPUT_DIR, "emopia-output")
+
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--emotion_class",
-        type=int,
-        default=4,
-        help="the target emotion class you want. It should belongs to [1,2,3,4].",
-    )
-    parser.add_argument(
-        "--output_name",
-        type=str,
-        default="test",
-        help="Name for the output files",
-    )
-    args = parser.parse_args()
 
-    output_name = args.output_name
-    emotion_class = args.emotion_class
-
+    # Prepare the dictionary
     dictionary = pickle.load(open(DICTIONARY_PATH, "rb"))
     event2word, word2event = dictionary
 
-    # config
-    n_class = []  # num of classes for each token
+    n_class = []  # num classes for each token
     for key in event2word.keys():
         n_class.append(len(dictionary[0][key]))
     n_token = len(n_class)
@@ -46,11 +39,13 @@ if __name__ == "__main__":
         torch.load(PRETRAINED_MODEL_PATH, map_location=torch.device("cpu"))
     )
 
-    # Generate
-    midi_path = f"{output_name}.mid"
-    audio_path = f"{output_name}.mp3"
+    # Generate 10 examples for each emotion class
+    for emotion_class in range(1, 5):
+        for i in range(10):
+            res, _ = net.inference_from_scratch(
+                dictionary, emotion_class, n_token=8, display=False
+            )
 
-    res, _ = net.inference_from_scratch(
-        dictionary, emotion_class, n_token=8, display=False
-    )
-    write_midi(res, midi_path, word2event)
+            filepath = os.path.join(EMOPIA_OUTPUT_DIR, f"{emotion_class}_{i}.mid")
+            write_midi(res, filepath, word2event)
+            print(f"Saved {filepath}")
