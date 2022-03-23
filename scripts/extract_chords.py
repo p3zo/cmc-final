@@ -1,6 +1,7 @@
 """Process polyphonic midi to make it more well-suited for chord extraction"""
 
 import argparse
+import glob
 import os
 import warnings
 from functools import partial
@@ -8,7 +9,7 @@ from functools import partial
 import numpy as np
 import pandas as pd
 import pretty_midi
-from music21 import converter, stream
+from music21 import converter
 
 try:
     THIS_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -16,8 +17,10 @@ except:
     THIS_DIR = os.getcwd()
 
 DATA_DIR = os.path.join(THIS_DIR, "../data")
+TEST_INPUT_PATH = os.path.join(DATA_DIR, "Sakamoto_MerryChristmasMr_Lawrence.mid")
+
 OUTPUT_DIR = os.path.join(THIS_DIR, "../output")
-INPUT_PATH = os.path.join(DATA_DIR, "Sakamoto_MerryChristmasMr_Lawrence.mid")
+EMOPIA_OUTPUT_DIR = os.path.join(OUTPUT_DIR, "emopia-output")
 
 if not os.path.isdir(OUTPUT_DIR):
     os.makedirs(OUTPUT_DIR)
@@ -138,85 +141,48 @@ def mk_midi_from_notes(notes):
     return midi
 
 
-def prepare(
-    filepath,
-    shortest_note,
-    smooth_beat,
-    quantize_beat,
-):
-    """Pre-process midi to improve effectiveness of chord extraction algorithm"""
+def simplify_harmony(filepath, shortest_note, smooth_beat, quantize_beat):
+    """Simplify midi to its essential harmonic content"""
 
-    # Load the midi file
     midi = load_midi_file(filepath)
 
     notes = parse_notes(midi)
 
     tempos = midi.get_tempo_changes()
 
+    # TODO: handle tempo changes
     if len(tempos[0]) == 0:
         raise ValueError("No tempos")
-    if len(tempos[0]) > 1:
-        raise ValueError("Multiple tempos. TODO: handle tempo changes")
+    # if len(tempos[0]) > 1:
+    #     raise ValueError("Can't handle tempo changes")
+
+    # TODO: calculate note durations based on time signature
 
     bpm = tempos[1][0]
     whole_note_dur = 60 / bpm * 4  # seconds
 
-    # TODO: calculate note durations based on time signature
-
-    # convert durations from beats to seconds
+    # convert durations to seconds
     shortest_dur = whole_note_dur * shortest_note
     smooth_dur = whole_note_dur * smooth_beat
     quantize_dur = whole_note_dur * quantize_beat
 
-    cleaned = drop_short_notes(notes, shortest_dur)
-    smoothed = smooth_notes(cleaned, smooth_dur)
-    cleaned_again = drop_short_notes(smoothed, shortest_dur * 4)
+    notes_cleaned = drop_short_notes(notes, shortest_dur)
+    notes_smoothed = smooth_notes(notes_cleaned, smooth_dur)
+    notes_cleaned_2 = drop_short_notes(notes_smoothed, shortest_dur * 4)
 
-    # TODO: lengthen notes to fill in rests
+    # TODO: split on long rests (parameterized duration)
+    # TODO: lengthen notes to fill in shorter rests
 
-    quantized_onsets = quantize_times(cleaned_again["start"], quantize_dur)
-    quantized_offsets = quantize_times(cleaned_again["end"], quantize_dur)
+    # Quantize both the start and end times of each note
+    notes_cleaned_2["start"] = quantize_times(notes_cleaned_2["start"], quantize_dur)
+    notes_cleaned_2["end"] = quantize_times(notes_cleaned_2["end"], quantize_dur)
 
-    cleaned_again["start"] = quantized_onsets
-    cleaned_again["end"] = quantized_offsets
+    # If start and end were quantized to the same time, move the end time back
+    for note in notes_cleaned_2:
+        if note["start"] == note["end"]:
+            note["end"] += quantize_dur
 
-    # If start == end, the notes last until the next onset of that pitch
-    # so we move the end of the note back
-    for cn in cleaned_again:
-        if cn["start"] == cn["end"]:
-            cn["end"] += quantize_dur
-
-    return mk_midi_from_notes(cleaned_again)
-
-
-def extract(filepath):
-    score = converter.parse(filepath)
-
-    # sChords = score.chordify()
-    # # for thisChord in sChords.recurse().getElementsByClass("Chord"):
-    # #     print(thisChord.measureNumber, thisChord.beatStr, thisChord)
-
-    # sFlat = sChords.flatten()
-
-    # sOnlyChords = sFlat.getElementsByClass("Chord")
-
-    # displayPart = stream.Part(id="displayPart")
-
-    # for i in range(0, len(sOnlyChords) - 1):
-    #     thisChord = sOnlyChords[i]
-    #     nextChord = sOnlyChords[i + 1]
-
-    #     # if thisChord.isTriad() is True or thisChord.isSeventh() is True:
-    #     closePositionThisChord = thisChord.closedPosition(forceOctave=4)
-    #     closePositionNextChord = nextChord.closedPosition(forceOctave=4)
-
-    #     m = stream.Measure()
-    #     m.append(closePositionThisChord)
-    #     m.append(closePositionNextChord)
-    #     displayPart.append(m)
-
-    # return displayPart
-    return score.chordify()
+    return mk_midi_from_notes(notes_cleaned_2)
 
 
 if __name__ == "__main__":
@@ -225,31 +191,35 @@ if __name__ == "__main__":
     parser.add_argument(
         "--filepath",
         type=str,
-        default=INPUT_PATH,
+        default=TEST_INPUT_PATH,
         help="Path to a midi file",
     )
     args = parser.parse_args()
 
     filepath = args.filepath
-    songname = os.path.splitext(os.path.basename(filepath))[0]
 
-    intermediate_path = os.path.join(OUTPUT_DIR, f"prepped-{songname}.mid")
-    output_path = os.path.join(OUTPUT_DIR, f"chords-{songname}.mid")
+    for filepath in glob.glob(os.path.join(EMOPIA_OUTPUT_DIR, "*")):
 
-    print("Prepping midi...")
+        songname = os.path.splitext(os.path.basename(filepath))[0]
 
-    # Process the midi
-    prepared = prepare(filepath, SHORTEST_NOTE, SMOOTH_BEAT, QUANTIZE_BEAT)
-    prepared.write(intermediate_path)
+        extracted = simplify_harmony(
+            filepath, SHORTEST_NOTE, SMOOTH_BEAT, QUANTIZE_BEAT
+        )
+        chords_path = os.path.join(OUTPUT_DIR, f"chords-{songname}.mid")
+        extracted.write(chords_path)
+        print(f"Wrote chords to {chords_path}")
 
-    # Extract chords from the prepped midi
-    extracted = extract(intermediate_path)
-    midi_out = extracted.write("midi", fp=output_path)
-    print(f"Wrote chords to {output_path}")
+        # Use music21 chordify method
+        score = converter.parse(filepath)
+        chordified = score.chordify()
+        chorified_path = os.path.join(OUTPUT_DIR, f"chordified-{songname}.mid")
+        midi_out = chordified.write("midi", fp=chorified_path)
+        print(f"Wrote chords to {chorified_path}")
 
-    # Prep one more time...
-    prepared = prepare(output_path, SHORTEST_NOTE, SMOOTH_BEAT, QUANTIZE_BEAT)
-
-    # Write the final file
-    final_path = os.path.join(OUTPUT_DIR, f"double-prepped-{songname}.mid")
-    prepared.write(final_path)
+        # Use our method on the music21 output
+        extracted_2 = simplify_harmony(
+            chorified_path, SHORTEST_NOTE, SMOOTH_BEAT, QUANTIZE_BEAT
+        )
+        chords_2_path = os.path.join(OUTPUT_DIR, f"both-{songname}.mid")
+        extracted_2.write(chords_2_path)
+        print(f"Wrote chords to {chords_2_path}")
