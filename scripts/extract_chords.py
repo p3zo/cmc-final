@@ -223,3 +223,19 @@ if __name__ == "__main__":
         chords_2_path = os.path.join(OUTPUT_DIR, f"both-{songname}.mid")
         extracted_2.write(chords_2_path)
         print(f"Wrote chords to {chords_2_path}")
+
+        """
+        # IMPORTANT: the method below will not run for you.
+        #
+        # The `harman.py` module depends on a private package that I have
+        # yet to open-source or include with this repository.
+        #
+        # See the docstring at the top of `harman.py` for more details.
+        #
+        # In the meantime, you can view the output labels of the algorithm
+        # in the output directory as `harman-*.csv`.
+        """
+        # # Use the method based on the HarmAn algorithm
+        # from harman import write_harman_labels
+        # harman_outpath = os.path.join(OUTPUT_DIR, f"harman-{songname}.csv")
+        # write_harman_labels(filepath, harman_outpath, songname)

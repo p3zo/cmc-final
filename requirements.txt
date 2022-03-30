@@ -2,5 +2,6 @@ torch==1.7.0
 torchvision==0.8.0
 torchaudio==0.7.0
 pytorch-fast-transformers==0.4.0
+networkx==2.7.1
 numpy==1.19.5
 miditoolkit==0.1.14
