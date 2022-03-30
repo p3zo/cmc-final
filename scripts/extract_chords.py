@@ -233,7 +233,7 @@ if __name__ == "__main__":
         # See the docstring at the top of `harman.py` for more details.
         #
         # In the meantime, you can view the output labels of the algorithm
-        # in the output directory as `harman-*.csv`.
+        # in included in the `demo` directory as `harman-*.csv`.
         """
         # # Use the method based on the HarmAn algorithm
         # from harman import write_harman_labels
